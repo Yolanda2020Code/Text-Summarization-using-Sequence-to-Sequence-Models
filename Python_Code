@@ -1,0 +1,48 @@
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, LSTM, Dense, Embedding, Attention
+
+# Dummy data for demonstration
+input_texts = ["This is a sample long input text that needs to be summarized."]
+target_texts = ["Sample summary."]
+
+# Tokenization and Padding (a full project would need a comprehensive preprocessing step)
+tokenizer = tf.keras.preprocessing.text.Tokenizer()
+tokenizer.fit_on_texts(input_texts + target_texts)
+input_sequences = tokenizer.texts_to_sequences(input_texts)
+target_sequences = tokenizer.texts_to_sequences(target_texts)
+
+input_data = tf.keras.preprocessing.sequence.pad_sequences(input_sequences, padding='post')
+target_data = tf.keras.preprocessing.sequence.pad_sequences(target_sequences, padding='post')
+
+vocab_size = len(tokenizer.word_index) + 1
+
+# Hyperparameters
+embedding_dim = 50
+units = 100
+
+# Building the Seq2Seq model with Attention
+encoder_inputs = Input(shape=(None,))
+encoder_embedding = Embedding(vocab_size, embedding_dim)(encoder_inputs)
+encoder_outputs, state_h, state_c = LSTM(units, return_state=True)(encoder_embedding)
+encoder_states = [state_h, state_c]
+
+decoder_inputs = Input(shape=(None,))
+decoder_embedding = Embedding(vocab_size, embedding_dim)(decoder_inputs)
+decoder_lstm = LSTM(units, return_sequences=True, return_state=True)
+decoder_outputs, _, _ = decoder_lstm(decoder_embedding, initial_state=encoder_states)
+attention = Attention(use_scale=True)
+attention_outputs = attention([decoder_outputs, encoder_outputs])
+concat_attention = tf.concat([decoder_outputs, attention_outputs], axis=-1)
+decoder_dense = Dense(vocab_size, activation='softmax')
+decoder_outputs = decoder_dense(concat_attention)
+
+model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy')
+
+# Training (with dummy data for demonstration)
+model.fit([input_data, target_data], np.expand_dims(target_data, -1), epochs=10, batch_size=1)
+
+# Saving the model
+model.save('seq2seq_summarization.h5')
